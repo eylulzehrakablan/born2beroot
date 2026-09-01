@@ -80,6 +80,11 @@ on the next (Summary) page, select 'Finish'
 
 # Setting up the virtual machine
 
+> **REMEMBER :** you can pause the VirtualBox where you are and resume later without losing any installer progress.
+1. Close the VirtualBox window by clicking the X in the top-right corner.
+2. Select "Save the machine state" and click OK.
+3. VirtualBox will freeze the RAM and current installer state onto your computer's disk. When you re-open VirtualBox and click Start, it will resume at this exact screen.
+
 and then we can Start our virtual machine by selecting freshly created vm and Start
 
 <img src="images/vm_start.png" alt="vm start" width="500">
@@ -267,6 +272,8 @@ The born2beRoot subject requirement states: "You must create at least 2 encrypte
 
 > **An encrypted partition** is a physical or logical disk area where all raw data is mathematically scrambled using a cryptographic algorithm (LUKS/AES in Linux). Without entering the correct password at boot to decrpyt it, the data remains unreadable to anyone pulling the hard drive out.
 
+> **LVM (Logical Volume Manager)** is a storage abstraction layer in Linux that allows you to manage disk space flexibly. in traditional partitioning, we devide a physical hard drive directly into fixed partitions (like sda1 in my project), which are difficult to resize or extend. LVM places a management layer between physical disks and the file systems, letting you treat disk space flexibly.
+
 one more time, let's take a closer look at the given lsblk output example:
 - sda5 is the physical partition on disk
 - sda_crypt is the decrypted container unlocked by your password
@@ -297,7 +304,6 @@ means:
 - sda2 is the Extended container holding the logical space
 
 We reserve and use Logical partitions for any scenario where you need more than 4 total partitions on a traditional MBR disk, or when you want to isolate non-critical user and system data away from the main primary boot files.
-
 
 Continuted with Logical type
 
@@ -341,4 +347,46 @@ and
 
 standart Linux architecture requires the standart design pattern across Linux distibutions is to keep a _small_, _unencrypted_ /boot partition so that GRUB can easily hand control over the kernel. the kernel handles prompting for the passphrase and decrypting the rest of the disk (which will be sda5_crypt in my project)
 
+and select 'Continue'
+ 
 <img src="images/devices_to_enc.png" alt="devices_to_enc" width="500">
+
+select 'Done setting up the partition'
+
+leave the remaining settings as it is:
+- Use as: physical volume for encryption (neat as day)
+- Encryption method: Device-mapper (dm-crypt) --> is a tool in the Linux system that locks and hides data on hard drives so people cannot read it without the correct password. Often works with LUKS.
+- Mount point: none --> an encrypted raw partition is simply a locked box (dm-crypt container). it doesn't contain a filesystem like Ext4 that Linux can attach to a folder directory. Leaving Mount point as none is mandatory so the installer knows to treat this partition purely as an encrypted container for LVM, rather than trying to mount it directly to the system
+- Mount options: defaults --> this option applies to how filesystem flags (dev, auto, exec, async, suid, rw etc.) are passed when mounting. Because this raw partition isn't being mounted directly, altering mount options here has no functional effect on the setup.
+- Encryption: aes, Key size: 256 --> AES-256 is the current standart for symmetric encription. provides maximum data protection.
+- IV algorithm: xts-plain64 --> XTS is the recommended Cipher Block Chaining mode specifically designed for full-disk encryption. Selecting older initialization vector (IV) modes like cbc-essiv might lead to make the volume more vulnerable to targeted cryptographic attacks
+- Encryption key: Passphrase --> this tells LUKS to prompt you for a password when booting up the virtual machine
+- Erase data: yes --> keeping it as <yes> hides the real data volume. An attacker looking at the drive won't be able to tell where your actual files end and where empty space begins. it will all look like random noise. It erases any leftover traces of old files that were on the disk before. you can save about 1–2 minutes during installation. however, old data remnants might stay on the drive, and an attacker can see exactly how much real data you actually have stored inside the encrypted container.
+- Bootable flag: off --> label that tells your computer's motherboard to start the computer from the specified partition. the system cannot directly start from and encrypted partition because it can't read the files inside without the password first. it won't work anyway if we set it to 'on'
+
+<img src="images/done_enc_part.png" alt="done with the current partition" width="500">
+
+selected 'Finish' since i want to follow the example on the project subject and don't want to create more encrypted volumes.
+
+<img src="images/finish_enc_conf.png" alt="done with creating encrypted volumes" width="500">
+
+The following screen is asking if you want to fill your new encrypted partition with random data before formatting it with LUKS. when preparing an encrypted volume, the installer offers to overwrite the entire partition space with random noise (0s and 1s). filling the partition with random noise prevents attackers from inspecting the raw drive later to tell the difference between actual encrypted files and unused empty space. 
+
+might take a few minutes to finish
+
+<img src="images/erase_sda5_data.png" alt="erase_sda5_data" width="500">
+
+<img src="images/erasing_data.png" alt="erasing_data" width="500">
+
+now we are supposed to enter a password but this time it will be the encryption passphrase, remember it.
+
+<img src="images/encryption_passphrase.png" alt="encryption passphrase" width="500">
+
+<img src="images/verify_enc_passphrase.png" alt="verify encryption passphrase" width="500">
+
+
+## Configuring the Logical Volume Manager
+
+we will configure the logical volume manager
+
+<img src="images/conf_lvm.png" alt="configure logical volume manager" width="500">
