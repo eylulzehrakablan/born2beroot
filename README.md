@@ -327,9 +327,9 @@ we can go for creating the encrypted volumes, select 'Configure encrypted volume
 
 <img src="images/configure_encrypted.png" alt="configure encrypted volumes" width="500">
 
-select <Yes> in order to write the current partitioning scheme to the disk before going on with the encrypted volumes. 
+select 'Yes' in order to write the current partitioning scheme to the disk before going on with the encrypted volumes. 
 
-i will be using LUKS (Linux Unified Key Setup) as the encryption tool. Linux kernel cannot build an encrypted LUKS container on top of a partition that does not technically exist on the physical drive yet.
+we will be using LUKS (Linux Unified Key Setup) as the encryption tool. Linux kernel cannot build an encrypted LUKS container on top of a partition that does not technically exist on the physical drive yet.
 
 <img src="images/write_to_disk.png" alt="write the partitioning scheme to disk" width="500">
 
@@ -361,7 +361,7 @@ leave the remaining settings as it is:
 - Encryption: aes, Key size: 256 --> AES-256 is the current standart for symmetric encription. provides maximum data protection.
 - IV algorithm: xts-plain64 --> XTS is the recommended Cipher Block Chaining mode specifically designed for full-disk encryption. Selecting older initialization vector (IV) modes like cbc-essiv might lead to make the volume more vulnerable to targeted cryptographic attacks
 - Encryption key: Passphrase --> this tells LUKS to prompt you for a password when booting up the virtual machine
-- Erase data: yes --> keeping it as <yes> hides the real data volume. An attacker looking at the drive won't be able to tell where your actual files end and where empty space begins. it will all look like random noise. It erases any leftover traces of old files that were on the disk before. you can save about 1–2 minutes during installation. however, old data remnants might stay on the drive, and an attacker can see exactly how much real data you actually have stored inside the encrypted container.
+- Erase data: yes --> keeping it as 'yes' hides the real data volume. An attacker looking at the drive won't be able to tell where your actual files end and where empty space begins. it will all look like random noise. It erases any leftover traces of old files that were on the disk before. you can save about 1–2 minutes during installation. however, old data remnants might stay on the drive, and an attacker can see exactly how much real data you actually have stored inside the encrypted container.
 - Bootable flag: off --> label that tells your computer's motherboard to start the computer from the specified partition. the system cannot directly start from and encrypted partition because it can't read the files inside without the password first. it won't work anyway if we set it to 'on'
 
 <img src="images/done_enc_part.png" alt="done with the current partition" width="500">
@@ -384,9 +384,288 @@ now we are supposed to enter a password but this time it will be the encryption 
 
 <img src="images/verify_enc_passphrase.png" alt="verify encryption passphrase" width="500">
 
+to sum up,
+
+- after setting up /boot (sda1), we selected the remaining FREE SPACE and assigned the max size.
+- when asked for the partition type, we chose Logical
+
+--> the moment we chose Logical, Debian automatically named that 5th partition slot as 'sda5' on disk.
+
+- immediately after, we went into 'Configure encrypted volumes' and set a passphrase
+
+--> Debian took that raw sda5 partition, applied the LUKS encryption layer on top of it, and mapped the decrypted, unlocked container as sda5_crypt.
+
+sda5 : the raw physical partition on the virtual disk
+
+sda5_crypt : the unlocked, decrypted container that sits on top of sda5 for LVM to use 
 
 ## Configuring the Logical Volume Manager
 
 we will configure the logical volume manager
 
 <img src="images/conf_lvm.png" alt="configure logical volume manager" width="500">
+
+write the current partitioning scheme to the disk
+
+<img src="images/write2disk_b4_lvm.png" alt="write to disk before conf. lvms" width="500">
+
+finally, sda_5crypt is sitting physically and ready as an encrypted storage space.
+
+and now, it's time to create logical volumes. before that, we need to create a volume group that holds the logical volumes. because, we cannot create logical volumes directly on a physical volume. lvm architecture enforces that logical volumes must live inside a volume group.
+--> the volume group abstracts the raw disk space. instead of dealing with fixed physical boundaries, the volume groups turn sda5_crypt into a continuous pool of storage blocks (extends) that you can allocate, shrink, or expand dynamically. 
+
+<img src="images/create_volume_group.png" alt="create_volume_group" width="500">
+
+
+on the next screen we are expected to enter a volume group name. 
+
+i will stick with the mandatory part and skip the bonus section, but still i want to use 'LVMGroup' as vg name as indicated in the bonus example.
+
+<img src="images/bonus_lsblk.png" alt="bonus partition table" width="500">
+
+Linux device mapper automatically replaces single hyphens with (-) double hyphens (--) in the system path diplay. and seperates the volume group name and the logical volume names with a (-). we can modify the volume group name later anyway.
+
+
+<img src="images/vg_name.png" alt="enter volume group name" width="500">
+
+/dev/mapper/sda5_crypt is our encrypted storage protected by LUKS. by building the volume group inside it, every logical volume we create automatically becomes encrypted
+
+<img src="images/device4vg.png" alt="select device for volume group" width="500">
+
+## Configuring Logical Volumes
+
+select 'Create logical volume' just like the project subject wanted (at least 2 partitions using LVM)
+
+<img src="images/create_lv.png" alt="create logical volume" width="500">
+
+ofc we have only one choice, select it
+
+<img src="images/select_vg.png" alt="select volume group" width="500">
+
+on the next screens, we fill out the name and size as indicated in the mandatory part for the logical volumes we create.
+
+<img src="images/lv_root.png" alt="name logical volume 'root'" width="500">
+
+<img src="images/lv_size_root.png" alt="size of logical volume 'root'" width="500">
+
+repeat the same thing for all of the logical volumes shown in the mandatory partition table.
+
+after you are done with creating the logical volumes, select 'finish'
+
+<img src="images/finish_creating_lv.png" alt="finisg creating lv" width="500">
+
+on the next screen, we can see that we have created our 3 logical volumes inside LVMGroup. 
+
+<img src="images/configured_partitions.png" alt="configured_partitions overview" width="500">
+
+we can also see that instead of a drawing nested tree, we see each virtual device block seperately. the reason they appear as seperate top-level blocks in this interface is simply because of how the Debian installer renders different device-mapper devices.
+
+> a device-mapper device is a virtual storage layer created by kernel
+
+instead of writing data directly to a physical hard drive, Linux uses the Device Mapper framework to pass data through virtual translations (like encryption or logical volume management) before it touches the physical disk.
+
+every time we add a virtual layer on top of our raw disk (sda), Linux creates a new device-mapper device under /dev/mapper/. in our setup, we have 4 device-mapper devices running.
+
+physical disk itself (sda5) ---> not a device mapper device.
+    /dev/mapper/sda5_crypt  ---> device-mapper device #1 (LUKS encryption layer)
+        volume group (LVMGroup)
+            /dev/mapper/LVMGroup-root ---> device-mapper device #2
+            /dev/mapper/LVMGroup-swap_1 ---> device-mapper device #3
+            /dev/mapper/LVMGroup-home ---> device-mapper device #4
+
+for the next step, we are supposed to configure all of them. select the first one appearing, which is 'home' in my project
+
+we only created an empty, unformatted slice of space so far. the installer needs to know how to format it and where to attach it in the system. so select 'Use as'
+
+<img src="images/home_settings.png" alt="home partition settings" width="500">
+
+we need to choose Ext4 for home (and also for root) because LVM and encryption do not provide a file system. they only manage raw storage blocks.
+
+- LUKS (sda5_crypt) only scrambles raw bits on the disk for security
+
+- LVM (LVMGroup) only measures out the physical boundaries of the virtual partitions (home, root, swap)
+
+- Ext4 (file system) is the actual index book that organizes data into folders, files, permissions and file names so the operating system can read and write to it. (Ext4 is the standart reliable Linux file system used for general storage partitions btw)
+
+without choosing a file system like ext4, Linux just sees LV home as a raw block of 4.0 GB of empty noise and cannot write any files or directories inside it
+
+<img src="images/home_use_as.png" alt="home_use_as" width="500">
+
+after continuing with Ext4 file system, we are greeted by the other configurations on the next screen. we also need to set the mount point so that the operating system knows where to attach /home logical volume. 
+
+<img src="images/home_mount_point.png" alt="home mount point" width="500">
+
+by setting the mount point to /home, from now on, whenever /home directory is accessed by a user, those files are read and written directly inside this encrypted logical volume.
+
+leave the other setting as default and done setting up the partition. (i had mentioned about the other settings earlier)
+
+<img src="images/home_mounting.png" alt="home mounting" width="500">
+
+<img src="images/done_home.png" alt="done_home" width="500">
+
+now repeat the same process for all of the other logical volumes except swap.
+
+you should modify swap's settings. according to the subject, swap's device-mapper is swap area. 
+
+choose: 'Use as: swap area'. and done setting up the partition
+
+after you are done with configuring logical volumes -> Finish Partitioning and write changes to disk
+
+<img src="images/done_lv_conf.png" alt="done configuring the logical volumes" width="500">
+
+<img src="images/verify_lv_conf_changes.png" alt="verify lv configuration changes" width="500">
+
+<img src="images/installing_base_system.png" alt="installing_base_system" width="500">
+
+on the next screen, Debian's installer asks us if we have any secondary ISO files. i prefer to download all additional packages (sudo, ufw, openssh-server etc.) required for the project from the internet over the debian network. i will skip this step.
+
+<img src="images/extra_installation.png" alt="extra installation" width="500">
+
+for the next step, we need to select a country that is specific to you. it does not change anything but download speed for our project. choosing the archive mirror country simply determines which server location your package manager (apt) connects to when downloading tools.
+
+<img src="images/mirror_country.png" alt="choose archive mirror country" width="500">
+
+select deb.debian.org as Debian archive mirror.
+
+**deb.debian.org** is the official default recommended by Debian. it automatically picks the fastes working server for you. additionally, if local regional servers go down, it instantly switches to a backup server so it never fails. 
+
+<img src="images/archive_mirror.png" alt="select archive mirror" width="500">
+
+Debian's installer asks us if we want to add a HTTP proxy. we want to connect directly to the internet. home internet and 42 campus networks allow direct connections, so no proxy information is needed here. just leave it as it is and continue.
+
+<img src="images/http_proxy.png" alt="http proxy information" width="500">
+
+i had an error at this point. the reason might be the virtual machine lost internet connection or couldn't resolve the DNS address for deb.debian.org. i selected 'Go Back'
+
+<img src="images/package_manager_error.png" alt="package manager error" width="500">
+
+configure package managers > rejected extra installation > choose Turkiye > select ftp.tr.debian.org > leave the HTTP proxy information empty
+
+and waited for a few minutes for installations
+
+the installer asks if we want the developers to see our statistics. since we are doing our best to minimize background processes, cron jobs and unnecessary network traffic as born2beroot requires, we better say 'no'
+
+<img src="images/sending_statistics.png" alt="sending_statistics" width="500">
+
+on the next step we will uncheck all of the selected softwares.
+
+- unchecked web server because the mandatory part does not require a web server and i don't intent to complete the bonus section. 
+- unchecked SSH server, because it comes with pre-configures defaults. the installer automatically configures openssh-server to run on default port 22. but the project requires SSH to run on port 4242, with root login disabled for security reasons, and managed behind ufw.
+- checking other debian desktop environments installs a heavy desktop interface with windows, icons, and a mouse pointer. as the project subject indicates, installing GUI violates the project requirements and will result in an immediate fail
+
+<img src="images/software_installation.png" alt="software_installation" width="500">
+
+as we mentioned previously, GRUB (Grand Unified Bootloader) is the first program that runs when the virtual machine boots up. it locates the Linux kernel on the drive, initializes the LUKS decryption process, and loads Debian into memory. without installing GRUB to our primary drive, our vm will have no instructions on how to start the operating system, resulting in a "no bootable device found" error on startup. press enter on 'Yes'
+
+<img src="images/install_grub_loader.png" alt="install_grub_loader" width="500">
+
+choose the device for boot loader instlalation
+
+<img src="images/device_bootloader.png" alt="device_bootloader" width="500">
+
+<img src="images/finish_grub_installation.png" alt="finish_grub_installation" width="500">
+
+# Virtual Machine Configuration
+
+after the installation setup, we'll see GRUB Bootloader menu appears on the screen.
+
+the first thing we do is select Debian GNU/Linux which is already selected and highlighted.
+
+GRUB has a built-in 5-second timeout counter. if you don't press any key within 5 seconds, it automatically boots the default highlighted option (which is Debian GNU/Linux in our system)
+
+on the next screen, we are greeted by the LUKS disk decryption prompt. pass the passphrase you previously set up.
+
+<img src="images/unlocking_sda5_crypt.png" alt="unlocking_sda5_crypt" width="500">
+
+enter non-root user credentials
+
+<img src="images/nonroot_credentials.png" alt="nonroot_credentials" width="500">
+
+let's start with installing sudo, we must be root before attempting to install sudo because new debian installations do not grant normal users administrative privileges by default.
+
+but why do we need sudo anyway? as you can guess, logging in as root continuously is dangerous. one wrong command can instantly wipe or break the system. we install sudo so that normal users can safely perform administrative tasks without having to log in directly as root every time. besides the fact that we need it, project specifies installing 'sudo'
+
+we can use `su` command. this command switches the user identity to 'root' which might be risky for me at this point because i don't know where the system administrative tools. using 'su' makes you remain in the regular user's directory (/home/ekablan) and keeps your normal user's environment variables (like $PATH, home directory, and configuration files)
+
+i could probably get confused at some point. 
+
+i preferred `su -` because it performs full login shell as root. completely loads root's environment variables, resets the $PATH variable to include system administration paths, and changes your current directory to /root. provides a clean, isolated environment guaranteed to locate administrative tools.
+
+we will use apt to install sudo. apt (Advanced Package Tool) is a package management system that is pre-installed by default as part of the Debian installation. we can use apt to handle installation and removal of software on Debian and Debian-based linux distributions.
+
+fetch the latest package repository lists using apt:
+`apt update`
+
+install the sudo package:
+`apt install sudo`
+
+<img src="images/installing_sudo.png" alt="installing_sudo" width="750">
+
+let's verify whether sudo is installed or not:
+`dpkg -l | grep sudo`
+
+<img src="images/dpkg-lgrepsudo.png" alt="dpkg -l | grep sudo" width="950">
+
+- **dpkg (Debian Package manager):** the core low-level tool in debian used to manage, install, remove and query .deb package files on the system.
+
+- **-l:** instructs dpkg to list every single package currently intalled or configured on the operating system.
+
+- **| (pipe symbol):** takes the standart output (the list of packages produced by dpkg -l) and passes it directly as input into the next command, rather than printing the entire list onto your screen.
+
+- **grep sudo:** grep (Global Regular Expression Print) is a search tool that scans incoming text line by line and filters out only the lines that match a specific pattern (sudo)
+
+in the output, we can see sudo is installed _**(ii)**_
+
+>the first letter (i) represents the 'desired package state'. i stands for 'install'
+- other desired package states: u (unknown), r (remove/deinstall), p (purge), h (hold)
+
+> the second letter (i) represents the 'current package state'. i stands for 'installed'.
+- other current package states: n (not installed), c (config files), U (unpacked), F (half configured - failed), h (half installed - failed), W (triggers-awaited : package is waiting for a triggger), t (triggers-pending : package has been triggered)
+
+now we can add the user to the sudo group. (according to the subject, the user has to belong to user42 and sudo groups)
+
+adding user to the sudo group, grants broad permissions to use sudo. in debian, any member of this group is allowed to run commands as root.
+
+we don't need to create a sudo group additionally, the installation script automatically created the sudo group in the system files when we installed the sudo package. after adding the user to sudo group, i checked which users belong to sudo group.
+
+<img src="images/adduser_ekablan_sudo.png" alt="adduser ekablan sudo" width="350">
+
+> **adduser** and **getent** are fundamental linux administration tools used for managing user accounts.
+
+- **adduser:** a high-level interactive command-line tool used to create a new user account on the system. can be used also for adding existing users to an existing group. (`adduser ekablan sudo`)
+
+- **getent:** short for 'get entry'. it fetches records from linux administrative databases (defined in /etc/nsswitch.conf) such as users, groups, or network hosts. `getent group sudo` displays the sudo group entry and lists all users assigned to it.
+
+from now on, since ekablan is a member of sudo group, ekablan user can use 'sudo' with all of the administrative privileges.
+
+this line indicates that every user assigned to the sudo group, inherits full administrative permission:
+
+<img src="images/sudo_config.png" alt="sudo config" width="350">
+
+this line gives all we want, we don't need to add ekablan user under the '# User privilege specification' anymore.
+
+<img src="images/user_priv_spec.png" alt="user privilege specification" width="300">
+
+
+i ran `groups` to verify if the active shell session reflected the new sudo group membership.
+
+<img src="images/ekablan_groups_b4_reboot.png" alt="ekablan_groups_b4_reboot" width="425">
+
+it doesn't show sudo. 
+
+> the underlying reason is: when we logged in (ekablan), Linux created a session 'permission token' in RAM based on /etc/group at that moment. adding ekablan to the sudo group updated the /etc/group file on the hard drive, but our running shell session was still using the old token cached in memory.commands like 'groups' check the session's memory token, which is why sudo wouldn't show up.
+
+i tried re-authenticating to my session.
+
+<img src="images/reauthenticate_ekablan.png" alt="reauthenticate_ekablan" width="450">
+
+This command was meant to open a fresh shell session as the current user 'ekablan' with updated group permissions. but it didn't work. idk why
+
+decided rebooting since it is the cleanest definitive solution. rebooting saves the changes to the disk. any files, installed packages, modified configurations etc are written directly to the disk when rebooting. use `reboot`
+
+but it got stuck for like 5 minutes
+
+<img src="images/after_sudo_reboot.png" alt="after_sudo_reboot" width="450">
+
+so i gave up waiting and power off the machine and than started it again. worked. didn't question it and moved on.
+
