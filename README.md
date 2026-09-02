@@ -683,9 +683,6 @@ after rebooting, i logged back in as ekablan and ran `groups`. sudo group now ap
 
 the project subject indicates that there must be an SSH service
 
-- [ ] must be running on port 4242
-- [ ] must not be possible to connect using SSH as root for security reasons
-
 ### What is SSH?
 
 **SSH (Secure Shell)** is a secure and encrypted network protocol that allows you to connect to and manage a remote computer or server via the command line.
@@ -723,3 +720,153 @@ and check if it is exists on the system, with `dpkg -l | grep ssh`
 
 ii means installed as in mentioned previously.
 
+by running `sudo systemctl status <service_name>`, we can check health, active state, and operational logs of any background program managed by the system.
+
+#### What is systemctl?
+
+modern Linux distributions like debian use an init system and service manager called systemd. systemd is the very first process that runs when your linux kernel boots up (it gets process ID 1). it is responsible for bringing up the entire system, mounting file systems, managing hardware events, and launching background services
+
+**systemctl** is the dedicated command-line utility used to communicate with and send instructions to the systemd process manager
+
+simply, systemctl is the remote control for the operating system's background programs (services/daemons). it lets us start, stop, enable, disable, and check the status of these services.
+
+<img src="images/ssh_status.png" alt="ssh status" width="650">
+
+the service is active but we can start the service with the following command-line:
+
+`sudo systemctl start ssh`
+
+other useful commands:
+
+`sudo systemctl stop ssh` : stops the from listening on network ports, closing active remote connections etc.
+
+`sudo systemctl reload ssh` : re-reads configuration files without terminating existing active client connections. we will use this command whenever we modify the ssh configuration file (/etc/ssh/sshd_config) to apply the changes. we can use **reload** when we edit the ssh port or disable root login so we don't risk getting kicked out of an active ssh session
+
+`sudo systemctl restart ssh` : stops and immediately starts the service again. required when updating core binary packages, fixing broken service state or when reload isn't supported.
+
+`sudo systemctl enable ssh` : configures systemd to launch SSH automatically every time the virtual machine boots up
+
+`sudo systemctl disable ssh` : prevents ssh starting from automatically on system startup
+
+### Configuring SSH
+
+the project subject indicates:
+
+- [x] must be running on port 4242
+- [x] must not be possible to connect using SSH as root for security reasons
+
+open the SSH configuration file: `sudo nano /etc/ssh/sshd_config`
+
+> find '#Port 22' line and remove '#' and change it as _**'Port 4242'**_
+
+> find 'PermitRootLogin prohibit-password' and remove '#" and change it as _**'PermitRootLogin no'**_
+
+ctrl + O > enter > ctrl + X
+
+<img src="images/ssh_configuration.png" alt="ssh config" width="950">
+
+checked the listening port with `sudo systemctl status ssh`, server was listening on port 22. ran `sudo systemctl restart ssh`. checked again:
+
+<img src="images/ssh_after_restart.png" alt="ssh_after_restart" width="750">
+
+we are done with the ssh configuration. now we can continue with firewall
+
+## Installing and Configuring UFW
+
+#### What is firewall?
+a firewall is a security guard for your computer's network connection. without a firewall, every port is open to anyone on the internet. a firewall checks every piece of incoming and outgoing network traffic, and enforces strict rules like 'port 4242 is allowed in but block every other port'
+
+### What is UFW? 
+UFW (uncomplicated firewall) is a simplified remote control for the linux kernel's built-in firewall. under the hood, linux uses a very complex and powerful security engine (nftables or iptables). configuring it directly requires writing looong and complicated syntax. ufw acts as a friendly wrapper so you don't have to deal with complexity.
+
+run `sudo apt install ufw`
+
+verify with `dpkg -l | grep ufw`
+
+<img src="images/verify_ufw_installation.png" alt="verify_ufw_installation" width="950">
+
+checked whether it is enabled
+
+<img src="images/ufw_status.png" alt="ufw status" width="550">
+
+i have found out that we cannot use systemctl for enabling ufw. systemctl only controls whether the program loads when the computer turns on. running `sudo systemctl enable ufw` only loads the program. but ufw stays in 'inactive' mode and lets all traffic through anyway. 
+
+we should use ufw command. `sudo ufw enable` turns it active and automatically configures systemctl to start it on boot for us 
+
+> ufw command is the official tool that comes directly with the installation of the UFW package
+
+<img src="images/ufw_status_after_enabling.png" alt="ufw status after enabling" width="400">
+
+the subject indicates only leave port 4242 open.
+
+<img src="images/ufw_allow_4242.png" alt="ufw_allow_4242" width="400">
+
+let's try to connect to our vm via our terminal:
+
+Oracle VirtualBox Menu > Settings > Network
+
+<img src="images/oracle_vm_menu.png" alt="oracle_vm_menu" width="500">
+
+<img src="images/oracle_vm_network.png" alt="oracle_vm_network" width="700">
+
+hit 'Port Forwarding'
+
+we are represented by the screen below
+
+<img src="images/port_forwarding.png" alt="port_forwarding" width="400">
+
+we will fill in the 'Host Port' and 'Guest Port' sections
+
+- Guest port (4242): defines which port inside the vm accepts the connection (where sshd is listening)
+> since the vm runs inside an isolated NAT network, your host computer's terminal has no direct way to locate the VM's internal IP address. Setting the Guest Port to 4242 acts as the internal target for VirtualBox's network bridge, directing traffic received at the host's outer boundary directly into Debian's listening SSH service on port 4242
+- Host port (4242): defines which port on our physical computer receives the terminal connection
+- by leaving IP field blank, VirtualBox defaults to listening on all local interfaces (127.0.0.1 / 0.0.0.0) and automatically routes the traffic directly to the vm's active virtual network interface
+
+i used 4242 as both Host and Guest ports. means i don't have to remember two different port numbers :):):):):) 
+
+you can decide on any port available
+
+<img src="images/port_forwarding_done.png" alt="port_forwarding_done" width="400">
+
+```
+it may cause a confliction issue if 4242 port is already in use on your system.
+
+i ran `nmap` against `localhost` to scan for open ports and verified which services are listening. 4242 was not in use in my system.
+
+used following command:
+`sudo nmap localhost -p-`
+```
+
+and hit ok and turn back to vm.
+
+even though a reboot isn't needed for the changes to function now, let's test if our ssh service and ufw firewall automatically start up on boot without manual intervention. confirming it is the best practice to reboot the vm before moving for the next section
+
+run `sudo reboot`
+
+and
+
+<img src="images/status_services_after_reboot.png" alt="status_services_after_reboot" width="700">
+
+both services are active and functioning.
+
+i observed that
+> ssh displays active (running) because it maintains a persistent listener daemon. long-running services (like ssh) must run a continuous process in memory to listen for incoming connections instantly.
+> ufw displays active (exited) because ufw is a configuration script, not a continuous process. On boot, systemd runs the ufw script, which loads the firewall rules directly into the kernel memory. once the kernel has the rules, the script finishes its job and exits. 
+
+## Connecting to the vm
+
+open your terminal on your pc
+
+run `ssh -p <host_port> <ekablann>@127.0.0.1`
+
+because our vm uses NAT mode, its internal IP address lives inside an isolated virtual network created by VirtualBox. our physical host computer cannot reach that address directly. instead, we instructed VirtualBox to open port 4242 on localhost.
+
+> localhost (or the ip address 127.0.0.1) refers to our physical computer itself.
+
+<img src="images/connect_via_cli.png" alt="connect_via_clie" width="700">
+
+remaining tasks
+- [ ] sudo policy (visudo) : adding log paths, password attempt limitatiosn etc.
+- [ ] password policy : password length, expiration and character rules etc.
+- [ ] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
+- [ ] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
