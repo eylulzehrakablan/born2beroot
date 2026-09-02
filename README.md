@@ -581,6 +581,8 @@ enter non-root user credentials
 
 <img src="images/nonroot_credentials.png" alt="nonroot_credentials" width="500">
 
+## installing 'sudo'
+
 let's start with installing sudo, we must be root before attempting to install sudo because new debian installations do not grant normal users administrative privileges by default.
 
 but why do we need sudo anyway? as you can guess, logging in as root continuously is dangerous. one wrong command can instantly wipe or break the system. we install sudo so that normal users can safely perform administrative tasks without having to log in directly as root every time. besides the fact that we need it, project specifies installing 'sudo'
@@ -621,6 +623,8 @@ in the output, we can see sudo is installed _**(ii)**_
 
 > the second letter (i) represents the 'current package state'. i stands for 'installed'.
 - other current package states: n (not installed), c (config files), U (unpacked), F (half configured - failed), h (half installed - failed), W (triggers-awaited : package is waiting for a triggger), t (triggers-pending : package has been triggered)
+
+## adding user to sudo group
 
 now we can add the user to the sudo group. (according to the subject, the user has to belong to user42 and sudo groups)
 
@@ -668,4 +672,54 @@ but it got stuck for like 5 minutes
 <img src="images/after_sudo_reboot.png" alt="after_sudo_reboot" width="450">
 
 so i gave up waiting and power off the machine and than started it again. worked. didn't question it and moved on.
+
+after rebooting, i logged back in as ekablan and ran `groups`. sudo group now appeared in the output, confirming that the new session security token successfully loaded the updated group permissions from disk:
+
+<img src="images/groups_after_reboot.png" alt="after_sudo_reboot" width="450">
+
+> **additional note:** even before rebooting, running `sudo whoami` returned 'root' because sudo reads group memberships directly from disk (/etc/group) on execution. however, rebooting was necessary to refresh the shell's session memory token so that standard commands like groups also recognize the updated membership
+
+## getting SSH service
+
+the project subject indicates that there must be an SSH service
+
+- [ ] must be running on port 4242
+- [ ] must not be possible to connect using SSH as root for security reasons
+
+### What is SSH?
+
+**SSH (Secure Shell)** is a secure and encrypted network protocol that allows you to connect to and manage a remote computer or server via the command line.
+
+it encrypts all username, password, and command data sent over the internet or a local network. this ensures that even a third party intercepts the data, they cannot read it as plain text.
+
+#### What is SSH Service (SSH Daemon / sshd)?
+
+the ssh service (sshd / OpenSSH server on Linux) is a program running continously in the background of a server that listens for incoming SSH connection requests. means, to connect to a server via SSH, an SSH service must be installed and actively running on that target server.
+
+1. The ssh server receives incoming connection attempts from a client
+2. authenticates the user via password or key
+3. provides terminal access upon successful verification 
+
+rules such as which port the SSH service listens on or whether root login is allowed are configured in the `/etc/ssh/sshd_config` file
+
+#### What is port?
+
+a port is a virtual gateway (like a network slot number) used by network services running on a computer to communicate with the outside world. 
+
+while a computer's address on a network is its IP address, the port number (ranging 0 to 65535) determines which specific application or service on that computer receives the data.
+
+let's get back to the installation 
+
+installing software modifies core system directories, installs background system services, and opens network ports. standart non-root users are restricted from making these system-wide changes. therefore we will install with root permission.
+
+`sudo apt install openssh-server -y`
+
+- 'openssh-server : the package name for the OpenSSH server daemon. This software allows secure, encrypted remote terminal connections (SSH) into your virtual machine
+- '-y' : yes flag (says yes to any confirmation prompt)
+
+and check if it is exists on the system, with `dpkg -l | grep ssh`
+
+<img src="images/dpkg-lgrepssh.png" alt="dpkg -l | grep ssh" width="950">
+
+ii means installed as in mentioned previously.
 
