@@ -1,3 +1,9 @@
+remaining tasks
+- [x] sudo policy (visudo) : adding log paths, password attempt limitatiosn etc.
+- [ ] password policy : password length, expiration and character rules etc.
+- [ ] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
+- [ ] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
+
 # Downloading VirtualBox
 first of all i started by downloading **Oracle VirtualBox** (i prefered downloading via a package manager)
 
@@ -865,8 +871,83 @@ because our vm uses NAT mode, its internal IP address lives inside an isolated v
 
 <img src="images/connect_via_cli.png" alt="connect_via_clie" width="700">
 
-remaining tasks
-- [ ] sudo policy (visudo) : adding log paths, password attempt limitatiosn etc.
-- [ ] password policy : password length, expiration and character rules etc.
-- [ ] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
-- [ ] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
+# Sudo Configuration
+
+now we are supposed to configure strict security rules for the sudo group to secure administrative privileges on the system.
+
+we need to edit /etc/sudoers configuration file to achieve this.
+
+/etc/sudoers controls user permissions and global sudo settings.
+
+we will use 'visudo' to edit this file. visudo is the official administrative tool used to safely edit the /etc/sudoers.
+
+the reason we are not using a standartt ext editor such as nano or vim is,
+
+if you edit /etc/sudoers with a normal text editor and make a single syntax error or typo, you can completely lock yourself out of administrative access and you will need to reboot into recovery mode and edit the kernel parameters to launch the root shell and repair the file manually. unnecessary headache due to a minor mistake.
+
+whereas 'visudo' prevents this completely. visudo opens /etc/sudoers in a temporary buffer file. when we save and exit, it runs a syntax check before writing any changes to the real file. if it detects a syntax error or typo, it warns you with a prompt and refuses to save the broken config 
+
+run `sudo visudo`
+
+added the required directives to the /etc/sudoers as the subject indicates,
+
+- Authentication using sudo has to be limited to 3 attempts in the event of an incorrect password.
+
+`Defaults passwd_tries=3`
+
+> Defaults keyword is a directive used in /etc/sudoers to set system-wide default behavior for the sudo command
+
+```
+ ~ Other usages of 'Defaults' keyword ~
+
+user-specific Defaults --> Defaults:ekablan passwd_tries = 4
+group-specific Defaults --> Defaults:%sudo !authenticate (runs commands without prompting for a password)
+host-specific Defaults --> Defaults@server1 (can be used if sharing one sudoers file across multiple servers)
+command-specific Defaults --> Defaults>/sbin/reboot !log_output (disables output logging when running /sbin/reboot) 
+
+```
+
+- A custom message of your choice has to be displayed if an incorrect password is entered when using sudo.
+
+`Defaults badpass_message="<message>"`
+
+- Each action performed with sudo has to be logged, including both inputs and outputs. The log file has to be saved in the /var/log/sudo/ folder.
+
+`Defaults log_input, log_output`
+`Defaults logfile="/var/log/sudo/sudo.log"`
+
+- The TTY mode has to be enabled for security reasons.
+
+`Defaults requiretty`
+
+> TTY refers to a terminal session. web servers, background cron jobs, or automated daemons run in non-TTY environments. if an attacker manages to inject a malicious command through a web application or background service, requrietty prevents them from escalating privileges via sudo. simply, requiretty guarantees that every sudo command is tied directly to a real user logged into an active terminal session.
+
+- For security reasons, the paths that can be used by sudo must also be restricted.
+Example:
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+
+> this requirement means sudo will only look for commands in those specific folders and will ignore everywhere else on the system.
+> when you type a command like `ls` or `reboot`, the system reaches a list of directories called the `PATH` variable to find where that program is stored. if an attacker manages to place a fake, malicious program with the same name inside a temporary folder (like /tmp), they could trick sudo into running their malicious code as root.
+> by restricting the paths, sudo completely ignores any non-standart or user-controlled folders, ensuring that only trusted system binaries are executed with root privileges.
+
+`Default /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin`
+
+```
+(when searchng for a command, Linux reads these folders one by one from left to right until it finds the executable file. ':' seperates locations in a sequence)
+```
+
+<img src="images/sudo_policy_configuration.png" alt="sudo_policy_configuration" width="900">
+
+there were some pre-existing directives in /etc/sudoers. those default settings were automatically placed there when Debian was installed. these are standart Linux security defaults that protect the system.
+
+`Default env_reset` --> resets your environment variables when running a command with sudo
+
+standart user accounts have environment variables that could be manipulated. resetting them prevents the malicious variable from tricking sudo into executing unsafe code
+
+`Defaults mail_badpass` --> sends an internal system email to the root account whenever someone enters an incorrect password while trying to use sudo. 
+
+alerts the system administrators about potential unauthorized login attempts or brute-force attacks
+
+`Defaults use_pty` --> forces sudo to run every command inside a newly allocated pseudo-terminal (PTY) session. 
+
+if a user runs an untrusted command using sudo, that command could inject fake directives back into the parent terminal's input buffer. once sudo exits, those injected commands would automatically run in the user's standard shell. use_pty isolates the command inside a pseudo-terminal session, preventing it from writing to the parent terminal
