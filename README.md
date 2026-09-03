@@ -871,7 +871,7 @@ because our vm uses NAT mode, its internal IP address lives inside an isolated v
 
 <img src="images/connect_via_cli.png" alt="connect_via_clie" width="700">
 
-# Sudo Configuration
+## Sudo Configuration
 
 now we are supposed to configure strict security rules for the sudo group to secure administrative privileges on the system.
 
@@ -951,3 +951,31 @@ alerts the system administrators about potential unauthorized login attempts or 
 `Defaults use_pty` --> forces sudo to run every command inside a newly allocated pseudo-terminal (PTY) session. 
 
 if a user runs an untrusted command using sudo, that command could inject fake directives back into the parent terminal's input buffer. once sudo exits, those injected commands would automatically run in the user's standard shell. use_pty isolates the command inside a pseudo-terminal session, preventing it from writing to the parent terminal
+
+## Password Policy Configuration
+
+now we are supposed to set up a strict password policy
+
+we need to edit /etc/login.defs configuration file to achieve this.
+
+/etc/login.defs defines 'shadow password suite default controls' meaning it manages user account creation defaults and time-based password aging policies across system. when we create a new user, or check password security settings, linux references this file for system-wide defaults. 
+
+we don't need a special editor for /etc/login.defs like visudo for /etc/sudoers because breaking /etc/login.defs will not instantly you out of the system administration. the difference is how linux handles these two files. a syntax error here will simply causes the system to ignore the broke line.
+
+run `sudo nano /etc/login.defs`
+
+find these lines:
+
+<img src="images/passwd_aging_controls.png" alt="passwd_aging_controls" width="450">
+
+and modify them as indicated in the subject
+
+- Your password has to expire every 30 days : `PASS_MAX_DAYS 30`
+- The minimum number of days between password changes must be set to 2 : `PASS_MIN_DAYS 2`
+- The user has to receive a warning message 7 days before their password expires : `PASS_WARN_AGE 7`
+
+modifying /etc/login.defs only sets the default values for newly created users. it does not update expiration rules for existing accounts (like root or the user account we created during installation)
+
+let's check with an existing user account:
+
+<img src="images/sudochageekablan.png" alt="sudochageekablan" width="450">
