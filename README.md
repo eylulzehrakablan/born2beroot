@@ -1183,6 +1183,8 @@ even if an application is running as root, AppArmor blocks any action not allowe
 > Mandatory Access Control
 
 
+
+
 ```
 AppArmor comes installed and enabled by default on modern Debian distributions, we don't additionally install it
 ```
@@ -1192,42 +1194,3 @@ we can see if AppArmor is active with the following command
 <img src="images/aastatus.png" alt="aastatus" width="325">
 
 modules and profiles are loaded, AppArmor is functioning.
-
-let's test AppArmor
-
-first verify initial ping functionality 
-
-<img src="images/pingoutput.png" alt="pingoutput" width="325">
-
-ping is functioning :):):):)
-
-now we modify AppArmor profile for ping to disable network sockets
-
-open configuration file: `sudo nano /etc/apparmor.d/bin.ping`
-
-i couldn't find the file, it is missing, i will install the default AppArmor extra profiles package:
-
-<img src="images/apparmorprofilei.png" alt="apparmorprofilei" width="625">
-
-now open configuration file
-
-<img src="images/bin.ping_before.png" alt="bin.ping_before" width="950">
-
-comment out the lines shown below
-
-<img src="images/bin.ping_after.png" alt="bin.ping_after" width="250">
-
-and remove flags=(complain) so AppArmor actually blocks the action instead of logging a warning
-
-<img src="images/complain_enforce.png" alt="complain_enforce" width="500">
-
-then reload the profile into kernel
-
-<img src="images/reload_profiles.png" alt="reload_profiles" width="600">
-
-but it didnt work im sorry
-
-<img src="images/ping_after_block.png" alt="ping_after_block" width="500">
-
-instead of editing the text manually, we'll force the profile into enforce mode:
-
