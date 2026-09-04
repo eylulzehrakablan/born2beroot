@@ -1375,3 +1375,10 @@ we can see if AppArmor is active with the following command
 <img src="images/aastatus.png" alt="aastatus" width="325">
 
 modules and profiles are loaded, AppArmor is functioning.
+
+todo
+---
+
+- [ ] allow broadcast messages for ssh users
+- [ ] add README.md
+- [ ] signature.txt
