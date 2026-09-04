@@ -1,6 +1,6 @@
 remaining tasks
 - [x] sudo policy (visudo) : adding log paths, password attempt limitatiosn etc.
-- [ ] password policy : password length, expiration and character rules etc.
+- [x] password policy : password length, expiration and character rules etc.
 - [ ] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
 - [ ] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
 
