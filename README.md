@@ -1,8 +1,8 @@
 remaining tasks
 - [x] sudo policy (visudo) : adding log paths, password attempt limitatiosn etc.
 - [x] password policy : password length, expiration and character rules etc.
-- [ ] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
-- [ ] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
+- [x] monitoring.sh : writing the shell script to collecr cpu, ram, disk, lvm and network stats
+- [x] cron setup : scheduling monitoring.sh to broadcast via wall every 10 minutes in crontab
 
 # Downloading VirtualBox
 first of all i started by downloading **Oracle VirtualBox** (i prefered downloading via a package manager)
@@ -1021,6 +1021,8 @@ btw if you wonder what happens to 'nobody' user (UID 65534), is hardcoded in /et
 
 - **-f1** : selects only the 1st field from each line, which corresponds to the username in /etc/passwd as in shown in the image above
 
+or you can use `compgen -u`
+
 we have strayed too far from the topic
 
 let's get back to listing the expiration information of 'zehra' user account
@@ -1168,7 +1170,185 @@ i could add obscure, sha512 or yescrypt at the end of the line 2 since it was me
 
 <img src="images/aftermodifyingpam.png" alt="aftermodifyingpam" width="950">
 
-test to see if the polices are applied or not.
+test to see if the polices are applied or not by attempting to create a new user account
+
+<img src="images/password_policy_test.png" alt="password_policy_test" width="600">
+
+<img src="images/addtestsudo.png" alt="addtestsudo" width="250">
+
+<img src="images/deleteusers.png" alt="deleteusers" width="525">
+
+deleting this way leaves the deleted user's home directory and every other file behind. don't do 
+what i do and delete the users with these parameter:
+
+`sudo deluser --remove-home <user>`
+
+`sudo deluser --remove-all-files <user>`
+
+<img src="images/deleteuserss.png" alt="deletedusers" width="400">
+
+now i will change the ekablan user's password
+
+you can change the root password via `sudo passwd`
+and a user account's password via `sudo passwd <user>`
+
+when using `passwd` without `sudo`, passwd command asks for the current password and then the new password
+
+## monitoring.sh (this section will be modified due to most of the directives and actions are not explatined)
+
+as the project indicated in subject, we have to create a script called monitoring.sh written in bash
+
+monitoring.sh is a bash script used to track computer and server health metrics on unix-like operating systems. 
+
+the script will output informations specified in the subject
+
+first i will create monitor.sh at /usr/local/bin/ using nano:
+
+`sudo nano /usr/local/bin/monitor.sh`
+
+'/usr/bin/' is reserved for binaries installed by the system's package manager.
+
+'/usr/local/bin/' is the designated directory for custom scripts and programs created by the system administrator. placing our script here ensures it won't conflict with or be overwritten by official package updates. that is why we create monitor.sh here.
+
+additionally, /usr/local/bin/ is included in the default system $PATH for all users (including root)
+meaning you can execute monitoring.sh from anywhere in the terminal without typing its full path. cron and sudo jobs can easily locate and execute it safely
+
+add the relative directives
+
+> The architecture of your operating system and its kernel version.
+
+`arch=$(uname -a)`
+
+---
+> The number of physical processors.
+
+`cpup=$(grep "physical id" /proc/cpuinfo | sort -u | wc -l)`
+
+---
+> The number of virtual processors.
+
+`cpu_v=$(grep "processor" /proc/cpuinfo | wc -l)`
+
+---
+> The currently available RAM on your server and its utilization rate as a percentage.
+
+`ram_total=$(free -m | awk '$1 == "Mem:" {print $2}')`
+
+`ram_use=$(free -m | awk '$1 == "Mem:" {print $3}')`
+
+`ram_percent=$(free | awk '$1 == "Mem:" {printf("%.2f"), $3/$2*100}')`
+
+---
+> The currently available storage on your server and its utilization rate as a percentage.
+
+`disk_total=$(df -m | grep "/dev/" | grep -v "/boot" | awk '{disk_t += $2} END {printf ("%.1fGb"), disk_t/1024}')`
+
+`disk_use=$(df -m | grep "/dev/" | grep -v "/boot" | awk '{disk_u += $3} END {print disk_u}')`
+
+`disk_percent=$(df -m | grep "/dev/" | grep -v "/boot" | awk '{disk_u += $3} {disk_t += $2} END {printf("%d%%"), disk_u/disk_t*100}')`
+
+---
+> The current CPU utilization rate as a percentage.
+
+`cpul=$(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')`
+
+---
+> The date and time of the last reboot.
+
+`lb=$(who -b | awk '$1 == "system" {print $3 " " $4}')`
+
+---
+> Whether LVM is active or not.
+
+`lvmu=$(if [ $(lsblk | grep "lvm" | wc -l) -gt 0 ]; then echo yes; else echo no; fi)`
+
+---
+> The number of active connections.
+
+`tcpc=$(ss -s | grep "TCP:" | awk '{print $2}' | tr -d ',')`
+
+---
+> The number of users using the server.
+
+`ulog=$(users | wc -w)`
+
+---
+> The IPv4 address of your server and its MAC (Media Access Control) address.
+
+`ip=$(hostname -I | awk '{print $1}')`
+
+`mac=$(ip link show | grep "link/ether" | awk '{print $2}')`
+
+---
+> The number of commands executed with the sudo program.
+
+`sudo_count=$(journalctl _COMM=sudo 2>/dev/null | grep COMMAND | wc -l)`
+
+---
+```
+broadcast output across all terminals via wall
+
+wall "	#Architecture: $arch
+	#CPU physical : $cpup
+	#vCPU : $cpu_v
+	#Memory Usage: $ram_use/${ram_total}MB ($ram_percent%)
+	#Disk Usage: $disk_use/${disk_total} ($disk_percent)
+	#CPU load: $cpul%
+	#Last boot: $lb
+	#LVM use: $lvmu
+	#Connections TCP : $tcpc ESTABLISHED
+	#User log: $ulog
+	#Network: IP $ip ($mac)
+	#Sudo : $sudo_count cmd"
+```
+
+add a shebang at the very beginning: `#!/bin/bash`
+
+<img src="images/monitoring.sh.png" alt="monitoring.sh" width="400">
+
+now we will make the script executable
+
+`sudo chmod +x /usr/local/bin/monitoring.sh`
+
+and test whether script is working
+
+`sudo bash /usr/local/bin/monitoring.sh`
+
+i got the information outputs on the vm's terminal session
+
+<img src="images/vmmonitoring.sh.png" alt="vmmonitoring.sh" width="675">
+
+however, i didn't get any output on my ssh terminal. that happens because 'wall' only broadcasts to terminals that are registered as writable message destinations in the system, and ssh login sessions on Debian often don't have message writing permissions enabled by default
+
+idk if we are supposed to handle this but i wanted to ant tried. i couldnt make it so i'll deal with that later
+
+the broadcast message appears thrice so
+
+we will fix this via configuring crontab file.
+
+```
+crontab is a configuration file and a command-line utility used in unix-like operating system to schedule tasks to run automatically in the background at specific times.
+
+we will use crontab command which is used to create, edit and manage scheduled tasks
+
+these scheduled tasks are commonly referred as cron jobs
+
+**(subject requirement) :** At server startup, the script will display the information listed below on all terminals, and every 10 minutes (take a look at **'wall'**). The banner is optional. No errors should be displayed.
+
+wall stands for 'write all'. it is a built-in linux command used by the system administrators to broadcast a message to the screen of all currently open user terminal sessions
+
+we will satisfy the project requirements mostly with crontab.
+```
+
+<img src="images/sudocrontab.png" alt="sudocrontab" width="375">
+
+chose 1
+
+<img src="images/crontab_file.png" alt="crontab_file" width="775">
+
+add these two lines at the end of the crontab file to satisfy the first subject requierement (At server startup, the script will display the information listed below on all terminals,
+and every 10 minutes (take a look at wall). The banner is optional. No errors should be
+displayed) 
 
 ## AppArmor (Application Armor)
 
@@ -1180,10 +1360,11 @@ AppArmor fixes this vulnerability using profiles (defining exactly which files i
 
 even if an application is running as root, AppArmor blocks any action not allowed in its profile at the kernel level
 
-> Mandatory Access Control
+> _**Mandatory Access Control**_ : is a security model where access permissions are managed by the operating system kernel, rather than by individual file owners. every user, file, directory, and system resource is assigned a specific security label or profile. when a user or program tries to access a resource, the system checks those central rules. even if a user is running the program as root, they cannot bypass th policy set by the security administrator.
 
+--> if a web server or app running as root gets compromised by an attacker, standard Linux permissions would give the attacker full control of the system
 
-
+under MAC (like AppArmor), the attacker is trapped inside the program's profile and cannot read '/etc/shadow', modify system binaries, or access network interfaces outside its assigned scope
 
 ```
 AppArmor comes installed and enabled by default on modern Debian distributions, we don't additionally install it
