@@ -1294,4 +1294,3 @@ we can see if AppArmor is active with the following command
 <img src="images/aastatus.png" alt="aastatus" width="325">
 
 modules and profiles are loaded, AppArmor is functioning.
-
