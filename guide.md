@@ -1106,9 +1106,7 @@ test to see if the polices are applied or not by attempting to create a new user
 deleting this way leaves the deleted user's home directory and every other file behind. don't do 
 what i did and delete the users with these parameters:
 
-`sudo deluser --remove-home <user>`
-
-`sudo deluser --remove-all-files <user>`
+`sudo deluser --remove-home --remove-all-files <user>`
 
 <img src="images/deleteuserss.png" alt="deletedusers" width="400">
 
