@@ -594,7 +594,7 @@ we don't need to create a sudo group additionally, the installation script autom
 
 - **getent:** short for 'get entry'. it fetches records from linux administrative databases (defined in /etc/nsswitch.conf) such as users, groups, or network hosts
 
-this line indicates that every user assigned to the sudo group, inherits full administrative permission:
+this line (in sudoers file) indicates that every user assigned to the sudo group, inherits full administrative permission:
 
 <img src="images/sudo_config.png" alt="sudo config" width="350">
 
